@@ -13,9 +13,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.openclassrooms.netapp.R;
-import com.openclassrooms.netapp.Utils.GithubCalls;
-import com.openclassrooms.netapp.Utils.NetworkAsyncTask;
+import com.openclassrooms.netapp.Utils.GithubStreams;
 import com.openclassrooms.netapp.models.GithubUser;
+import com.openclassrooms.netapp.models.GithubUserInfo;
 
 import java.util.List;
 
@@ -30,13 +30,13 @@ import io.reactivex.observers.DisposableObserver;
 /**
  * A simple {@link Fragment} subclass.
  */
-public class MainFragment extends Fragment implements GithubCalls.Callbacks {
+public class MainFragment extends Fragment {
 
     // FOR DESIGN
     @BindView(R.id.fragment_main_textview) TextView textView;
     @BindView(R.id.progressBar) ProgressBar progressBar;
 
-    // 4 - Declare Subscription
+    //FOR DATA
     private Disposable disposable;
 
     public MainFragment() { }
@@ -60,30 +60,53 @@ public class MainFragment extends Fragment implements GithubCalls.Callbacks {
 
     @OnClick(R.id.fragment_main_button)
     public void submit(View view) {
-        this.executeHttpRequestWithRetrofit();
+        // 2 - Call the stream
+        this.executeSecondHttpRequestWithRetrofit();
     }
 
     @OnClick(R.id.fragment_rxjava_button)
     public void click(View view) {
         //this.executeHttpRequestWithRetrofit();
-        this.streamShowString();
+        this.executeHttpRequestWithRetrofit();
     }
 
-    // ------------------------------
-    //  Reactive X
-    // ------------------------------
+    // -------------------
+    // HTTP (RxJAVA)
+    // -------------------
 
-    // 1 - Create Observable
-    private Observable<String> getObservable(){
-        return Observable.just("Cool !");
-    }
-
-    // 2 - Create Subscriber
-    private DisposableObserver<String> getSubscriber(){
-        return new DisposableObserver<String>() {
+    // 1 - Execute our Stream
+    private void executeHttpRequestWithRetrofit(){
+        // 1.1 - Update UI
+        this.updateUIWhenStartingHTTPRequest();
+        // 1.2 - Execute the stream subscribing to Observable defined inside GithubStream
+        this.disposable = GithubStreams.streamFetchUserFollowing("JakeWharton").subscribeWith(new DisposableObserver<List<GithubUser>>() {
             @Override
-            public void onNext(String item) {
-                textView.setText("Observable emits : "+item);
+            public void onNext(List<GithubUser> users) {
+                Log.e("TAG","On Next");
+                // 1.3 - Update UI with list of users
+                updateUIWithListOfUsers(users);
+            }
+
+            @Override
+            public void onError(Throwable e) {
+                Log.e("TAG","On Error"+Log.getStackTraceString(e));
+                updateUIWhenErrorHTTPRequest(e.getMessage());
+            }
+
+            @Override
+            public void onComplete() {
+                Log.e("TAG","On Complete !!");
+            }
+        });
+    }
+
+    private void executeSecondHttpRequestWithRetrofit(){
+        this.updateUIWhenStartingHTTPRequest();
+        this.disposable = GithubStreams.streamFetchUserFollowingAndFetchFirstUserInfos("JakeWharton").subscribeWith(new DisposableObserver<GithubUserInfo>() {
+            @Override
+            public void onNext(GithubUserInfo users) {
+                Log.e("TAG","On Next");
+                updateUIWithUserInfo(users);
             }
 
             @Override
@@ -93,85 +116,43 @@ public class MainFragment extends Fragment implements GithubCalls.Callbacks {
 
             @Override
             public void onComplete() {
-                Toast.makeText(getContext(), "Complete", Toast.LENGTH_SHORT).show();
-                Log.e("TAG", "On Complete !!");
+                Log.e("TAG","On Complete !!");
             }
-        };
+        });
     }
 
-    // 3 - Create Stream and execute it
-    private void streamShowString(){
-        this.disposable = this.getObservable()
-                .map(getFunctionUpperCase())
-                .flatMap(getSecondObservable())
-                .subscribeWith(getSubscriber());
-    }
-
-    // 1 - Create function to Uppercase a string
-    private Function<String, String> getFunctionUpperCase(){
-        return new Function<String, String>() {
-            @Override
-            public String apply(String s) throws Exception {
-                return s.toUpperCase();
-            }
-        };
-    }
-
-    // 1 - Create a function that will calling a new observable
-    private Function<String, Observable<String>> getSecondObservable(){
-        return new Function<String, Observable<String>>() {
-            @Override
-            public Observable<String> apply(String previousString) throws Exception {
-                return Observable.just(previousString+" I love Openclassrooms !");
-            }
-        };
-    }
-
-    // 5 - Dispose subscription
     private void disposeWhenDestroy(){
         if (this.disposable != null && !this.disposable.isDisposed()) this.disposable.dispose();
     }
 
-    // ------------------
-    //  UPDATE UI
-    // ------------------
+    // -------------------
+    // UPDATE UI
+    // -------------------
 
     private void updateUIWhenStartingHTTPRequest(){
         this.textView.setText("Downloading...");
-        progressBar.setVisibility(View.VISIBLE);
+        this.progressBar.setVisibility(View.VISIBLE);
     }
 
     private void updateUIWhenStopingHTTPRequest(String response){
         this.textView.setText(response);
-        progressBar.setVisibility(View.GONE);
+        this.progressBar.setVisibility(View.GONE);
     }
 
-    // 3 - Update UI showing only name of users
+    private void updateUIWhenErrorHTTPRequest(String response){
+        this.textView.setText("Error : " + response);
+        //this.progressBar.setVisibility(View.GONE);
+    }
+
     private void updateUIWithListOfUsers(List<GithubUser> users){
         StringBuilder stringBuilder = new StringBuilder();
         for (GithubUser user : users){
-            stringBuilder.append("-"+user.getLogin().toUpperCase()+"\n");
+            stringBuilder.append("-"+user.getLogin()+"\n");
         }
         updateUIWhenStopingHTTPRequest(stringBuilder.toString());
     }
 
-    // 4 - Execute HTTP request and update UI
-    private void executeHttpRequestWithRetrofit(){
-        this.updateUIWhenStartingHTTPRequest();
-        GithubCalls.fetchUserFollowing(this, "JakeWharton");
-    }
-
-    // 2 - Override callback methods
-
-    @Override
-    public void onResponse(@Nullable List<GithubUser> users) {
-        // 2.1 - When getting response, we update UI
-        if (users != null) this.updateUIWithListOfUsers(users);
-    }
-
-    @Override
-    public void onFailure() {
-        // 2.2 - When getting error, we update UI
-        this.updateUIWhenStopingHTTPRequest("An error happened !");
+    private void updateUIWithUserInfo(GithubUserInfo userInfo){
+        updateUIWhenStopingHTTPRequest("The first Following of Jake Wharthon is "+userInfo.getName()+" with "+userInfo.getFollowers()+" followers.");
     }
 }
