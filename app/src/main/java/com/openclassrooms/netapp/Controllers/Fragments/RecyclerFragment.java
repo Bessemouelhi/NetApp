@@ -34,7 +34,7 @@ public class RecyclerFragment extends Fragment implements GithubUserAdapter.List
 
     // FOR DESIGN
     @BindView(R.id.fragment_main_recycler_view)
-    RecyclerView recyclerView; // 1 - Declare RecyclerView
+    RecyclerView recyclerView;
     // 1 - Declare the SwipeRefreshLayout
     @BindView(R.id.fragment_main_swipe_container)
     SwipeRefreshLayout swipeRefreshLayout;
